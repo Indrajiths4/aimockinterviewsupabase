@@ -1,16 +1,12 @@
 "use client"
 import { Button } from '@/components/ui/button'
 import Image from 'next/image'
-import React, { use, useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Webcam from 'react-webcam'
 import useSpeechToText from 'react-hook-speech-to-text';
 import { Mic, StopCircle } from 'lucide-react'
 import { toast } from 'sonner'
-import { chatSession } from '@/utils/GeminiAiModel'
-import { db } from '@/utils/db'
-import { UserAnswer } from '@/utils/schema'
 import { useUser } from '@clerk/nextjs'
-import moment from 'moment'
 
 function RecordAnswerSection({mockInterviewQuestion,activeQuestionIndex,interviewData}) {
     const [userAnswer, setUserAnswer] = useState("");
@@ -39,58 +35,50 @@ function RecordAnswerSection({mockInterviewQuestion,activeQuestionIndex,intervie
         if (!isRecording && userAnswer.length > 10) {
           UpdateUserAnswer();
         }
-        // if (userAnswer?.length < 10) {
-        //   setLoading(false);
-        //      toast("Error while saving your answer,please record again");
-        //      return;
-        // }
       },[userAnswer])
+
       const StartStopRecording = async () => {
-        
         if(isRecording) {
           stopSpeechToText()
-          
         }
         else {
           startSpeechToText()
         }
       }
 
-
       const UpdateUserAnswer = async() => {
         setLoading(true);
-        const feedbackPrompt =
-        "Question:" +
-        mockInterviewQuestion[activeQuestionIndex]?.question +", User Answer:" +userAnswer+",Depends on question and user answer for given interview question " +" please give use rating for answer and feedback as area of improvement if any" +" in just 3 to 5 lines to improve it in JSON format with rating field and feedback field";
-        const result = await chatSession.sendMessage(feedbackPrompt);
-        const mockJsonResp=(result.response.text()).replace('```json','').replace('```','');
-        console.log("Result:",mockJsonResp);
-        const JsonFeedbackResp=JSON.parse(mockJsonResp);
+        try {
+          const response = await fetch('/api/user-answers', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              mockInterviewQuestion,
+              activeQuestionIndex,
+              interviewData,
+              userAnswer,
+              userEmail: user?.primaryEmailAddress?.emailAddress
+            })
+          });
 
-        const resp = await db.insert(UserAnswer).values({
-          mockIdRef: interviewData?.mockId,
-          question: mockInterviewQuestion[activeQuestionIndex]?.question,
-          correctAns: mockInterviewQuestion[activeQuestionIndex]?.answer,
-          userAns: userAnswer,
-          feedback: JsonFeedbackResp?.feedback,
-          rating: JsonFeedbackResp?.rating,
-          userEmail: user?.primaryEmailAddress?.emailAddress,
-          createdAt: moment().format("DD-MM-YYYY"),
-        });
+          const result = await response.json();
 
-        if(resp) {
-          toast("User Answer Recorded Successfully")
-          setUserAnswer('');
-          
+          if (response.ok) {
+            toast("User Answer Recorded Successfully");
+            setUserAnswer('');
+          } else {
+            toast.error(result.error || "Failed to save answer");
+          }
+        } catch (error) {
+          console.error('Error saving answer:', error);
+          toast.error("Error saving your answer");
+        } finally {
+          setResults([]);
+          setLoading(false);
         }
-        setResults([]);
-        setLoading(false)
       }
-      
-
-      
-
-
       
   return (
     <div className='flex flex-col justify-center items-center'>
@@ -110,9 +98,6 @@ function RecordAnswerSection({mockInterviewQuestion,activeQuestionIndex,intervie
           </h2>
         )}
     </Button>
-
-    
-    
     </div>
   )
 }
