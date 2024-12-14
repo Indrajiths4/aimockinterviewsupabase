@@ -20,7 +20,7 @@ function Interview() {
     const GetInterviewDetails = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`/api/interviews/${params.interviewid}`, {
+            const response = await fetch(`/api/${params.interviewid}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
